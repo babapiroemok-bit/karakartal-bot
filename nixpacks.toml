@@ -2,7 +2,7 @@
 nixPkgs = ["nodejs_22"]
 
 [phases.install]
-cmds = ["npm install"]
+cmds = ["rm -f package-lock.json", "npm install"]
 
 [start]
 cmd = "node --experimental-sqlite index.js"
