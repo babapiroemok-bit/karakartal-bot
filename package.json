@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "KaraKartal Logistics Discord Bot",
   "main": "index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node index.js",
     "deploy": "node deploy-commands.js"
