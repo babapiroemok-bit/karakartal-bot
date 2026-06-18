@@ -4,15 +4,14 @@
   "description": "KaraKartal Logistics Discord Bot",
   "main": "index.js",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.5.0"
   },
   "scripts": {
-    "start": "node index.js",
-    "deploy": "node deploy-commands.js"
+    "start": "node --experimental-sqlite index.js",
+    "deploy": "node --experimental-sqlite deploy-commands.js"
   },
   "dependencies": {
     "@discordjs/voice": "^0.17.0",
-    "better-sqlite3": "^9.4.3",
     "discord.js": "^14.14.1",
     "dotenv": "^16.4.5",
     "libsodium-wrappers": "^0.7.13",
