@@ -5,7 +5,6 @@ const fs = require('fs');
 const path = require('path');
 const db = require('./database');
 
-// Eksik env var kontrolu
 const required = ['DISCORD_TOKEN'];
 const missing = required.filter(k => !process.env[k]);
 if (missing.length > 0) {
@@ -15,7 +14,7 @@ if (missing.length > 0) {
 
 console.log('Bot baslatiliyor...');
 console.log('NODE_VERSION:', process.version);
-console.log('GUILD_ID:', process.env.GUILD_ID ? 'SET' : 'NOT SET (global register kullanilacak)');
+console.log('GUILD_ID:', process.env.GUILD_ID ? 'SET' : 'NOT SET');
 
 const client = new Client({
   intents: [
@@ -71,18 +70,24 @@ async function registerCommands(clientId, guildId) {
       console.log(commands.length + ' komut guild\'e register edildi. Guild ID:', guildId);
     } else {
       await rest.put(Routes.applicationCommands(clientId), { body: commands });
-      console.log(commands.length + ' komut global olarak register edildi (1 saat surabilir).');
+      console.log(commands.length + ' komut global olarak register edildi.');
     }
   } catch (err) {
-    console.error('Komut register hatasi (bot calismaya devam ediyor):', err.message);
+    console.error('Komut register hatasi:', err.message, err.code || '');
   }
 }
 
 client.once(Events.ClientReady, async () => {
-  console.log('Bot Discord\'a baglandi:', client.user.tag);
-  console.log('Client ID:', client.application.id);
+  console.log('Bot baglandi:', client.user.tag, '| Client ID:', client.application.id);
 
-  await registerCommands(client.application.id, process.env.GUILD_ID || null);
+  // Tum sunuculara register et
+  for (const guild of client.guilds.cache.values()) {
+    await registerCommands(client.application.id, guild.id);
+  }
+  // GUILD_ID yoksa global da register et
+  if (!process.env.GUILD_ID) {
+    await registerCommands(client.application.id, null);
+  }
 
   const VC_ID = '1517073292802916493';
   const vc = client.channels.cache.get(VC_ID);
@@ -97,7 +102,7 @@ client.once(Events.ClientReady, async () => {
       });
       console.log('Ses kanalina baglandi:', vc.name);
     } catch (e) {
-      console.warn('Ses kanalina baglanamadi (bot calismaya devam ediyor):', e.message);
+      console.warn('Ses kanalina baglanamadi:', e.message);
     }
   }
 
@@ -111,6 +116,12 @@ client.once(Events.ClientReady, async () => {
   setInterval(() => { client.user.setActivity(statuses[i % statuses.length]); i++; }, 30000);
   client.user.setActivity(statuses[0]);
   console.log('Bot hazir! Komutlar aktif.');
+});
+
+// Bot yeni bir sunucuya eklendiginde komutlari aninda register et
+client.on(Events.GuildCreate, async guild => {
+  console.log('Yeni sunucuya eklendi:', guild.name, guild.id);
+  await registerCommands(client.application.id, guild.id);
 });
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -179,7 +190,9 @@ client.on(Events.MessageCreate, async message => {
 
 client.on(Events.GuildMemberAdd, async member => {
   try {
-    const channel = member.guild.channels.cache.find(c => c.name === 'hos-geldin' || c.name === 'genel' || c.name === 'general');
+    const channel = member.guild.channels.cache.find(c =>
+      c.name === 'hos-geldin' || c.name === 'genel' || c.name === 'general'
+    );
     if (channel) {
       const embed = new EmbedBuilder()
         .setColor(0xE67E22)
@@ -198,9 +211,8 @@ client.on(Events.GuildMemberAdd, async member => {
   }
 });
 
-// Beklenmedik hatalarda botu kapat
 process.on('unhandledRejection', err => {
-  console.error('Unhandled rejection:', err);
+  console.error('Unhandled rejection:', err?.message || err);
 });
 process.on('uncaughtException', err => {
   console.error('Uncaught exception:', err);
