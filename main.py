@@ -51,11 +51,15 @@ class KaraKartalBot(commands.Bot):
         print(f"🤖 Bot ID: {self.user.id}")
         print(f"🌐 Sunucu sayısı: {len(self.guilds)}")
         print(f"{'='*40}")
-        print("\n🚀 Railway Setup:")
-        print("  1. Railway.app'e git → New Project → Deploy from GitHub Repo")
-        print("  2. Repo: karakartal-bot")
-        print("  3. Environment Variables → DISCORD_TOKEN ekle")
-        print("  4. Deploy!")
+
+        for guild in self.guilds:
+            try:
+                self.tree.copy_global_to(guild=guild)
+                synced = await self.tree.sync(guild=guild)
+                print(f"⚡ [{guild.name}] {len(synced)} komut anında senkronize edildi")
+            except Exception as e:
+                print(f"⚠️ [{guild.name}] guild sync hatası: {e}")
+
         print(f"{'='*40}\n")
 
 
