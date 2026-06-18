@@ -16,19 +16,44 @@ class Status(commands.Cog):
 
     def cog_unload(self):
         self.rotate_presence.cancel()
+        self.voice_watchdog.cancel()
 
     async def cog_load(self):
-        pass
+        self.voice_watchdog.start()
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        channel = self.bot.get_channel(VOICE_CHANNEL_ID)
-        if channel and isinstance(channel, discord.VoiceChannel):
+    async def _connect_voice(self):
+        try:
+            channel = await self.bot.fetch_channel(VOICE_CHANNEL_ID)
+        except Exception as e:
+            print(f"⚠️ Ses kanalı alınamadı: {e}")
+            return
+
+        if not isinstance(channel, discord.VoiceChannel):
+            print(f"⚠️ {VOICE_CHANNEL_ID} bir ses kanalı değil.")
+            return
+
+        guild = channel.guild
+        vc = guild.voice_client
+
+        if vc and vc.is_connected():
+            return
+
+        if vc:
             try:
-                await channel.connect()
-                print(f"✅ Ses kanalına bağlanıldı: {channel.name}")
-            except Exception as e:
-                print(f"⚠️ Ses kanalına bağlanılamadı: {e}")
+                await vc.disconnect(force=True)
+            except Exception:
+                pass
+
+        try:
+            await channel.connect()
+            print(f"✅ Ses kanalına bağlanıldı: {channel.name}")
+        except Exception as e:
+            print(f"⚠️ Ses kanalına bağlanılamadı: {e}")
+
+    @tasks.loop(seconds=60)
+    async def voice_watchdog(self):
+        await self.bot.wait_until_ready()
+        await self._connect_voice()
 
     @tasks.loop(seconds=30)
     async def rotate_presence(self):
