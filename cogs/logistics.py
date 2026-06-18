@@ -6,6 +6,12 @@ from utils.embeds import make_embed, success_embed, error_embed, BRAND_COLOR
 import database as db
 
 LOGISTICS_FOOTER = "🦅 KaraKartal Logistics"
+ADMIN_ROLE_IDS = {1515044780776886484, 1515090088265125889, 1515628992269652109}
+
+
+def is_admin(interaction: discord.Interaction) -> bool:
+    return any(r.id in ADMIN_ROLE_IDS for r in interaction.user.roles) or \
+           interaction.user.guild_permissions.administrator
 
 
 class ActiveDeliveriesView(discord.ui.View):
@@ -96,8 +102,13 @@ class Logistics(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="araç-ekle", description="Sisteme yeni araç ekle (Admin)")
-    @app_commands.checks.has_permissions(administrator=True)
     async def arac_ekle(self, interaction: discord.Interaction, plaka: str, model: str, kapasite: str):
+        if not is_admin(interaction):
+            await interaction.response.send_message(
+                embed=error_embed("❌ Yetkisiz", "Bu komutu kullanmak için admin yetkisine sahip olman gerekiyor."),
+                ephemeral=True,
+            )
+            return
         await db.add_vehicle(interaction.guild.id, plaka, model, kapasite)
         await interaction.response.send_message(
             embed=success_embed(
