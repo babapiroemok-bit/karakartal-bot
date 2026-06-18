@@ -6,13 +6,17 @@ from utils.embeds import make_embed, success_embed, error_embed, warn_embed
 import database as db
 
 
+ADMIN_ROLE_IDS = {1515044780776886484, 1515090088265125889, 1515628992269652109}
+ADMIN_ROLE_NAMES = {"Yetkili", "Moderatör"}
+
+
 def has_mod_role():
     async def predicate(interaction: discord.Interaction) -> bool:
-        allowed = {"Yetkili", "Moderatör"}
-        if any(r.name in allowed for r in interaction.user.roles):
+        user_roles = interaction.user.roles
+        if any(r.id in ADMIN_ROLE_IDS or r.name in ADMIN_ROLE_NAMES for r in user_roles):
             return True
         await interaction.response.send_message(
-            embed=error_embed("❌ Yetkisiz", "Bu komutu kullanmak için **Yetkili** veya **Moderatör** rolü gereklidir."),
+            embed=error_embed("❌ Yetkisiz", "Bu komutu kullanmak için gerekli yetkili rolüne sahip değilsin."),
             ephemeral=True,
         )
         return False
