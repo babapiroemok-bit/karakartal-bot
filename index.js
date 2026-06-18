@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ override: false });
 const { Client, GatewayIntentBits, Partials, Collection, Events, EmbedBuilder } = require('discord.js');
 const { joinVoiceChannel } = require('@discordjs/voice');
 const fs = require('fs');
