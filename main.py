@@ -66,6 +66,21 @@ class KaraKartalBot(commands.Bot):
 bot = KaraKartalBot()
 
 
+@bot.command(name="sync")
+@commands.is_owner()
+async def sync_commands(ctx):
+    bot.tree.copy_global_to(guild=ctx.guild)
+    synced = await bot.tree.sync(guild=ctx.guild)
+    await ctx.send(f"⚡ {len(synced)} komut bu sunucuya anında senkronize edildi!")
+
+
+@bot.command(name="gsync")
+@commands.is_owner()
+async def global_sync(ctx):
+    synced = await bot.tree.sync()
+    await ctx.send(f"🌐 {len(synced)} komut global olarak senkronize edildi (1 saat sürebilir).")
+
+
 async def main():
     if not TOKEN:
         print("❌ DISCORD_TOKEN bulunamadı! Lütfen .env dosyasını veya ortam değişkenlerini kontrol edin.")
