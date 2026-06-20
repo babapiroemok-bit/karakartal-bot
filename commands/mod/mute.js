@@ -1,5 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
+const YETKILİ_ROLLER = ['1515090088265125889', '1515628992269652109'];
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('mute')
@@ -9,7 +11,7 @@ module.exports = {
     .addStringOption(o => o.setName('sebep').setDescription('Susturma sebebi').setRequired(false)),
 
   async execute(interaction, db, client) {
-    const yetkili = interaction.member.roles.cache.some(r => ['Yetkili', 'Moderator'].includes(r.name));
+    const yetkili = interaction.member.roles.cache.some(r => YETKILİ_ROLLER.includes(r.id));
     if (!yetkili) return interaction.reply({ content: '❌ Bu komutu kullanma yetkiniz yok!', ephemeral: true });
 
     const hedef = interaction.options.getUser('kullanici');
@@ -21,8 +23,7 @@ module.exports = {
     await member.timeout(sure * 60000, sebep);
 
     const logEmbed = new EmbedBuilder()
-      .setColor(0xf39c12)
-      .setTitle('🔇 Kullanıcı Susturuldu')
+      .setColor(0xf39c12).setTitle('🔇 Kullanıcı Susturuldu')
       .addFields(
         { name: 'Yetkili', value: `${interaction.user}`, inline: true },
         { name: 'Hedef', value: `${hedef}`, inline: true },
@@ -30,8 +31,7 @@ module.exports = {
         { name: 'Sebep', value: sebep },
         { name: 'Tarih', value: new Date().toLocaleString('tr-TR') },
       )
-      .setFooter({ text: '🦅 KaraKartal Logistics' })
-      .setTimestamp();
+      .setFooter({ text: '🦅 KaraKartal Logistics' }).setTimestamp();
 
     const logCh = interaction.guild.channels.cache.find(c => c.name === 'yetkili-log');
     if (logCh) await logCh.send({ embeds: [logEmbed] });
