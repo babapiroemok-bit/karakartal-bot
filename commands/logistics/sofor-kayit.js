@@ -14,9 +14,10 @@ module.exports = {
     const guildId = interaction.guild.id;
 
     const mevcut = db.prepare('SELECT * FROM drivers WHERE user_id = ?').get(userId);
-    if (mevcut) return interaction.reply({ content: '❌ Zaten şoför olarak kayıtlısınız!', ephemeral: true });
+    if (mevcut) return interaction.reply({ content: '❌ Zaten şoför olarak kayıtlısınız! Profilinizi görmek için `/sofor-profil` kullanın.', ephemeral: true });
 
-    db.prepare('INSERT INTO drivers (user_id, guild_id, full_name, plate) VALUES (?, ?, ?, ?)').run(userId, guildId, adSoyad, plaka);
+    // INSERT OR IGNORE — race condition koruması
+    db.prepare('INSERT OR IGNORE INTO drivers (user_id, guild_id, full_name, plate) VALUES (?, ?, ?, ?)').run(userId, guildId, adSoyad, plaka);
 
     const embed = new EmbedBuilder()
       .setColor(0x2ecc71)
@@ -25,6 +26,7 @@ module.exports = {
         { name: '👤 Ad Soyad', value: adSoyad, inline: true },
         { name: '🚗 Plaka', value: plaka, inline: true },
       )
+      .setDescription('Artık teslimat alabilirsiniz! `/aktif-teslimatlar` ile açık teslimatları görün.')
       .setFooter({ text: '🦅 KaraKartal Logistics' })
       .setTimestamp();
 
