@@ -5,7 +5,7 @@ const YETKILİ_ROLLER = ['1515090088265125889', '1515628992269652109'];
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('ticket-zorla-kapat')
-    .setDescription('Belirtilen ticket kanalını zorla kapatır ve 5 saniyede siler.')
+    .setDescription('Ticket kanalını zorla kapatır ve 5 saniyede siler.')
     .addChannelOption(o =>
       o.setName('kanal').setDescription('Kapatılacak ticket kanalı (boş = mevcut kanal)').setRequired(false)
     ),
@@ -16,9 +16,9 @@ module.exports = {
 
     const hedefKanal = interaction.options.getChannel('kanal') || interaction.channel;
 
-    const ticket = db.prepare("SELECT * FROM tickets WHERE channel_id = ? AND status = 'open'").get(hedefKanal.id);
-    if (!ticket) {
-      return interaction.reply({ content: '❌ Bu kanal aktif bir ticket kanalı değil!', ephemeral: true });
+    // Kanal adı ticket- ile başlamıyorsa reddet
+    if (!hedefKanal.name.startsWith('ticket-')) {
+      return interaction.reply({ content: '❌ Bu kanal bir ticket kanalı değil! Kanal adı `ticket-` ile başlamalı.', ephemeral: true });
     }
 
     const embed = new EmbedBuilder()
@@ -30,6 +30,7 @@ module.exports = {
 
     await interaction.reply({ embeds: [embed] });
 
+    // DB güncelle (kayıt varsa)
     db.prepare("UPDATE tickets SET status = 'closed' WHERE channel_id = ?").run(hedefKanal.id);
 
     setTimeout(async () => {
