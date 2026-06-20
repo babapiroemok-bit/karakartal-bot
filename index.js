@@ -50,11 +50,17 @@ function loadCommands(dir) {
 loadCommands(path.join(__dirname, 'commands'));
 console.log(`${client.commands.size} komut yüklendi.`);
 
-// Slash komutlarını otomatik kayıt et
+// Slash komutlarını otomatik kayıt et (global komutları temizle, sadece guild komutları koy)
 async function deployCommands() {
   try {
     const commands = [...client.commands.values()].map(c => c.data.toJSON());
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+    // Global (uygulama geneli) komutları tamamen temizle
+    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: [] });
+    console.log('🗑️ Global komutlar temizlendi.');
+
+    // Sadece bu sunucuya kayıt et
     await rest.put(
       Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
       { body: commands }
