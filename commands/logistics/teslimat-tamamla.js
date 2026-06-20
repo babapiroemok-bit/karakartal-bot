@@ -18,12 +18,9 @@ module.exports = {
 
     const userId = interaction.user.id;
     const guildId = interaction.guild.id;
-    let user = db.prepare('SELECT * FROM users WHERE user_id = ? AND guild_id = ?').get(userId, guildId);
-    if (!user) {
-      db.prepare('INSERT INTO users (user_id, guild_id) VALUES (?, ?)').run(userId, guildId);
-      user = db.prepare('SELECT * FROM users WHERE user_id = ? AND guild_id = ?').get(userId, guildId);
-    }
 
+    // INSERT OR IGNORE — unique constraint crash'ini önler
+    db.prepare('INSERT OR IGNORE INTO users (user_id, guild_id) VALUES (?, ?)').run(userId, guildId);
     db.prepare('UPDATE users SET balance = balance + ? WHERE user_id = ? AND guild_id = ?').run(delivery.reward, userId, guildId);
     db.prepare('UPDATE drivers SET total_deliveries = total_deliveries + 1, total_earned = total_earned + ? WHERE user_id = ?').run(delivery.reward, userId);
 
