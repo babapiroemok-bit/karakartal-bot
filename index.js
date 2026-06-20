@@ -84,10 +84,10 @@ client.once(Events.ClientReady, (c) => {
     { name: '/yardim | karakartal', type: ActivityType.Listening },
   ];
   let i = 0;
-  c.user.setActivity(presences[0]).catch(() => {});
+  try { c.user.setActivity(presences[0]); } catch (_) {}
   setInterval(() => {
     i++;
-    c.user.setActivity(presences[i % presences.length]).catch(() => {});
+    try { c.user.setActivity(presences[i % presences.length]); } catch (_) {}
   }, 30000);
 });
 
