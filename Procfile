@@ -1,1 +1,1 @@
-worker: node --experimental-sqlite index.js
+worker: node index.js

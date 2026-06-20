@@ -3,35 +3,36 @@ const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('disc
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('ban')
-    .setDescription('Bir kullanıcıyı sunucudan yasaklar')
-    .addUserOption(opt => opt.setName('kullanici').setDescription('Yasaklanacak kullanıcı').setRequired(true))
-    .addStringOption(opt => opt.setName('sebep').setDescription('Yasaklama sebebi').setRequired(false)),
+    .setDescription('Kullanıcıyı sunucudan yasaklar.')
+    .addUserOption(o => o.setName('kullanici').setDescription('Yasaklanacak kullanıcı').setRequired(true))
+    .addStringOption(o => o.setName('sebep').setDescription('Yasak sebebi').setRequired(false)),
+
   async execute(interaction, db, client) {
-    const hasRole = interaction.member.roles.cache.some(r => r.name === 'Yetkili' || r.name === 'Moderatör');
-    if (!hasRole && !interaction.member.permissions.has(PermissionFlagsBits.BanMembers)) {
-      return interaction.reply({ content: '❌ Bu komutu kullanmak için **Yetkili** veya **Moderatör** rolüne sahip olmalısın.', ephemeral: true });
-    }
-    const target = interaction.options.getMember('kullanici');
+    const yetkili = interaction.member.roles.cache.some(r => ['Yetkili', 'Moderator'].includes(r.name));
+    if (!yetkili) return interaction.reply({ content: '❌ Bu komutu kullanma yetkiniz yok!', ephemeral: true });
+
+    const hedef = interaction.options.getUser('kullanici');
     const sebep = interaction.options.getString('sebep') || 'Sebep belirtilmedi';
-    if (!target) return interaction.reply({ content: '❌ Kullanıcı bulunamadı.', ephemeral: true });
-    if (!target.bannable) return interaction.reply({ content: '❌ Bu kullanıcıyı yasaklayamam (yetkim yok).', ephemeral: true });
+    const member = await interaction.guild.members.fetch(hedef.id).catch(() => null);
+    if (!member) return interaction.reply({ content: '❌ Kullanıcı bulunamadı!', ephemeral: true });
 
-    await target.ban({ reason: sebep });
+    await member.ban({ reason: sebep });
 
-    const embed = new EmbedBuilder()
-      .setColor(0xE74C3C)
+    const logEmbed = new EmbedBuilder()
+      .setColor(0xe74c3c)
       .setTitle('🔨 Kullanıcı Yasaklandı')
       .addFields(
-        { name: 'Kullanıcı', value: `${target.user.tag}`, inline: true },
-        { name: 'Yetkili', value: `${interaction.user.tag}`, inline: true },
-        { name: 'Sebep', value: sebep }
+        { name: 'Yetkili', value: `${interaction.user}`, inline: true },
+        { name: 'Hedef', value: `${hedef}`, inline: true },
+        { name: 'Sebep', value: sebep },
+        { name: 'Tarih', value: new Date().toLocaleString('tr-TR') },
       )
       .setFooter({ text: '🦅 KaraKartal Logistics' })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed] });
+    const logCh = interaction.guild.channels.cache.find(c => c.name === 'yetkili-log');
+    if (logCh) await logCh.send({ embeds: [logEmbed] });
 
-    const logChannel = interaction.guild.channels.cache.find(c => c.name === 'yetkili-log');
-    if (logChannel) logChannel.send({ embeds: [embed] });
-  }
+    await interaction.reply({ embeds: [new EmbedBuilder().setColor(0xe74c3c).setTitle('✅ Kullanıcı yasaklandı').setDescription(`${hedef.tag} sunucudan yasaklandı.\nSebep: ${sebep}`).setFooter({ text: '🦅 KaraKartal Logistics' }).setTimestamp()] });
+  },
 };

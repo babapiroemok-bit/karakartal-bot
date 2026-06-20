@@ -1,37 +1,38 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('kick')
-    .setDescription('Bir kullanıcıyı sunucudan atar')
-    .addUserOption(opt => opt.setName('kullanici').setDescription('Atılacak kullanıcı').setRequired(true))
-    .addStringOption(opt => opt.setName('sebep').setDescription('Atma sebebi').setRequired(false)),
+    .setDescription('Kullanıcıyı sunucudan atar.')
+    .addUserOption(o => o.setName('kullanici').setDescription('Atılacak kullanıcı').setRequired(true))
+    .addStringOption(o => o.setName('sebep').setDescription('Atılma sebebi').setRequired(false)),
+
   async execute(interaction, db, client) {
-    const hasRole = interaction.member.roles.cache.some(r => r.name === 'Yetkili' || r.name === 'Moderatör');
-    if (!hasRole && !interaction.member.permissions.has(PermissionFlagsBits.KickMembers)) {
-      return interaction.reply({ content: '❌ Bu komutu kullanmak için **Yetkili** veya **Moderatör** rolüne sahip olmalısın.', ephemeral: true });
-    }
-    const target = interaction.options.getMember('kullanici');
+    const yetkili = interaction.member.roles.cache.some(r => ['Yetkili', 'Moderator'].includes(r.name));
+    if (!yetkili) return interaction.reply({ content: '❌ Bu komutu kullanma yetkiniz yok!', ephemeral: true });
+
+    const hedef = interaction.options.getUser('kullanici');
     const sebep = interaction.options.getString('sebep') || 'Sebep belirtilmedi';
-    if (!target) return interaction.reply({ content: '❌ Kullanıcı bulunamadı.', ephemeral: true });
-    if (!target.kickable) return interaction.reply({ content: '❌ Bu kullanıcıyı atamam (yetkim yok).', ephemeral: true });
+    const member = await interaction.guild.members.fetch(hedef.id).catch(() => null);
+    if (!member) return interaction.reply({ content: '❌ Kullanıcı bulunamadı!', ephemeral: true });
 
-    await target.kick(sebep);
+    await member.kick(sebep);
 
-    const embed = new EmbedBuilder()
-      .setColor(0xE67E22)
+    const logEmbed = new EmbedBuilder()
+      .setColor(0xe74c3c)
       .setTitle('👢 Kullanıcı Atıldı')
       .addFields(
-        { name: 'Kullanıcı', value: `${target.user.tag}`, inline: true },
-        { name: 'Yetkili', value: `${interaction.user.tag}`, inline: true },
-        { name: 'Sebep', value: sebep }
+        { name: 'Yetkili', value: `${interaction.user}`, inline: true },
+        { name: 'Hedef', value: `${hedef}`, inline: true },
+        { name: 'Sebep', value: sebep },
+        { name: 'Tarih', value: new Date().toLocaleString('tr-TR') },
       )
       .setFooter({ text: '🦅 KaraKartal Logistics' })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed] });
+    const logCh = interaction.guild.channels.cache.find(c => c.name === 'yetkili-log');
+    if (logCh) await logCh.send({ embeds: [logEmbed] });
 
-    const logChannel = interaction.guild.channels.cache.find(c => c.name === 'yetkili-log');
-    if (logChannel) logChannel.send({ embeds: [embed] });
-  }
+    await interaction.reply({ embeds: [new EmbedBuilder().setColor(0xe74c3c).setTitle('✅ Kullanıcı atıldı').setDescription(`${hedef.tag} sunucudan atıldı.\nSebep: ${sebep}`).setFooter({ text: '🦅 KaraKartal Logistics' }).setTimestamp()] });
+  },
 };

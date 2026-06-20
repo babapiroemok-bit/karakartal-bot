@@ -1,93 +1,83 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('destek')
-    .setDescription('Destek sistemi — ticket oluştur'),
+    .setDescription('Destek ticket panelini açar.'),
+
   async execute(interaction, db, client) {
     const embed = new EmbedBuilder()
-      .setColor(0x5865F2)
+      .setColor(0x3498db)
       .setTitle('🎫 KaraKartal Destek Sistemi')
-      .setDescription('Aşağıdaki butonlardan birini seçerek ticket oluşturabilirsin.\n\n🎫 **Destek** — Teknik yardım\n📋 **Başvuru** — Şoför veya yetkili başvurusu\n⚠️ **Şikayet** — Şikayet bildirimi')
+      .setDescription('Aşağıdaki butonlardan birine tıklayarak ticket oluşturabilirsiniz.')
       .setFooter({ text: '🦅 KaraKartal Logistics' })
       .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('ticket_destek').setLabel('🎫 Destek').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('ticket_basvuru').setLabel('📋 Başvuru').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('ticket_sikayet').setLabel('⚠️ Şikayet').setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId('ticket_destek').setLabel('🎫 Destek Talebi').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('ticket_basvuru').setLabel('📋 Başvuru Formu').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('ticket_sikayet').setLabel('⚠️ Şikayet').setStyle(ButtonStyle.Danger),
     );
 
     await interaction.reply({ embeds: [embed], components: [row] });
   },
 
   async handleButton(interaction, db, client) {
-    if (interaction.customId === 'ticket_kapat') {
-      const embed = new EmbedBuilder()
-        .setColor(0xE74C3C)
-        .setTitle('🔒 Ticket Kapatıldı')
-        .setDescription(`Ticket **${interaction.channel.name}** kapatıldı.`)
-        .setFooter({ text: '🦅 KaraKartal Logistics' })
-        .setTimestamp();
-
-      const logChannel = interaction.guild.channels.cache.find(c => c.name === 'ticket-log');
-      if (logChannel) logChannel.send({ embeds: [embed] });
-
-      await interaction.reply({ content: '🔒 Ticket 5 saniye içinde silinecek...', ephemeral: false });
-
-      db.prepare('UPDATE tickets SET status = ? WHERE channel_id = ?').run('closed', interaction.channel.id);
-
-      setTimeout(() => {
-        interaction.channel.delete().catch(() => {});
-      }, 5000);
-      return;
-    }
-
     const typeMap = {
-      ticket_destek: { label: 'Destek', emoji: '🎫' },
-      ticket_basvuru: { label: 'Başvuru', emoji: '📋' },
-      ticket_sikayet: { label: 'Şikayet', emoji: '⚠️' }
+      ticket_destek: 'destek',
+      ticket_basvuru: 'basvuru',
+      ticket_sikayet: 'sikayet',
     };
+
     const type = typeMap[interaction.customId];
     if (!type) return;
 
-    const existing = db.prepare('SELECT * FROM tickets WHERE user_id = ? AND guild_id = ? AND status = ?').get(interaction.user.id, interaction.guild.id, 'open');
+    const guild = interaction.guild;
+    const user = interaction.user;
+    const channelName = `ticket-${user.username.toLowerCase().replace(/[^a-z0-9]/g, '')}-${user.id.slice(-4)}`;
+
+    const existing = guild.channels.cache.find(c => c.name === channelName);
     if (existing) {
-      return interaction.reply({ content: `❌ Zaten açık bir ticket'ın var: <#${existing.channel_id}>`, ephemeral: true });
+      return interaction.reply({ content: `❌ Zaten açık bir ticket'ınız var: ${existing}`, ephemeral: true });
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    const yetkiliRole = guild.roles.cache.find(r => r.name === 'Yetkili');
+    const modRole = guild.roles.cache.find(r => r.name === 'Moderator');
 
-    const channelName = `ticket-${interaction.user.username}-${interaction.customId.replace('ticket_', '')}`;
-
-    const staffRole = interaction.guild.roles.cache.find(r => r.name === 'Yetkili' || r.name === 'Moderatör');
     const permissionOverwrites = [
-      { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-      { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }
+      { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+      { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
     ];
-    if (staffRole) permissionOverwrites.push({ id: staffRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] });
+    if (yetkiliRole) permissionOverwrites.push({ id: yetkiliRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] });
+    if (modRole) permissionOverwrites.push({ id: modRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] });
 
-    const channel = await interaction.guild.channels.create({
+    const channel = await guild.channels.create({
       name: channelName,
       type: ChannelType.GuildText,
-      permissionOverwrites
+      permissionOverwrites,
     });
 
-    db.prepare('INSERT INTO tickets (guild_id, user_id, type, channel_id, created_at) VALUES (?, ?, ?, ?, ?)')
-      .run(interaction.guild.id, interaction.user.id, type.label, channel.id, new Date().toISOString());
+    db.prepare('INSERT INTO tickets (guild_id, user_id, type, channel_id, created_at) VALUES (?, ?, ?, ?, ?)').run(guild.id, user.id, type, channel.id, new Date().toISOString());
+
+    const labelMap = { destek: '🎫 Destek Talebi', basvuru: '📋 Başvuru Formu', sikayet: '⚠️ Şikayet' };
 
     const ticketEmbed = new EmbedBuilder()
-      .setColor(0x5865F2)
-      .setTitle(`${type.emoji} ${type.label} Ticket`)
-      .setDescription(`Merhaba ${interaction.user}!\nTicket'ın oluşturuldu. Yetkili ekibimiz en kısa sürede sana yardımcı olacak.\n\nLütfen sorununu veya talebini detaylıca açıkla.`)
+      .setColor(0x3498db)
+      .setTitle(`${labelMap[type]}`)
+      .setDescription(`Merhaba ${user}! Ticket'ınız oluşturuldu. Yetkililerimiz en kısa sürede size yardımcı olacak.`)
       .setFooter({ text: '🦅 KaraKartal Logistics' })
       .setTimestamp();
 
     const closeRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('ticket_kapat').setLabel('🔒 Kapat').setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId('ticket_kapat').setLabel('🔒 Ticket Kapat').setStyle(ButtonStyle.Danger),
     );
 
-    await channel.send({ content: `${interaction.user} ${staffRole ? staffRole : ''}`, embeds: [ticketEmbed], components: [closeRow] });
-    await interaction.editReply({ content: `✅ Ticket oluşturuldu: ${channel}` });
-  }
+    await channel.send({ content: `${user} ${yetkiliRole || ''} ${modRole || ''}`, embeds: [ticketEmbed], components: [closeRow] });
+
+    await interaction.reply({ content: `✅ Ticket oluşturuldu: ${channel}`, ephemeral: true });
+
+    if (interaction.customId === 'ticket_kapat') {
+      await channel.delete().catch(() => {});
+    }
+  },
 };

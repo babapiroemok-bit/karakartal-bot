@@ -1,40 +1,37 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('teslimat-olustur')
-    .setDescription('Yeni teslimat ilanı oluşturur (Yetkili)')
-    .addStringOption(opt => opt.setName('baslangic').setDescription('Başlangıç konumu').setRequired(true))
-    .addStringOption(opt => opt.setName('bitis').setDescription('Bitiş konumu').setRequired(true))
-    .addStringOption(opt => opt.setName('yuk').setDescription('Yük türü').setRequired(true))
-    .addIntegerOption(opt => opt.setName('ucret').setDescription('Ödeme miktarı (₺)').setRequired(true).setMinValue(1)),
+    .setDescription('Yeni teslimat oluşturur.')
+    .addStringOption(o => o.setName('baslangic').setDescription('Başlangıç noktası').setRequired(true))
+    .addStringOption(o => o.setName('bitis').setDescription('Bitiş noktası').setRequired(true))
+    .addStringOption(o => o.setName('yuk').setDescription('Yük türü').setRequired(true))
+    .addIntegerOption(o => o.setName('ucret').setDescription('Ücret (₺)').setRequired(true)),
+
   async execute(interaction, db, client) {
-    const hasRole = interaction.member.roles.cache.some(r => r.name === 'Yetkili' || r.name === 'Moderatör');
-    if (!hasRole && !interaction.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
-      return interaction.reply({ content: '❌ Bu komutu kullanmak için **Yetkili** rolüne sahip olmalısın.', ephemeral: true });
-    }
     const baslangic = interaction.options.getString('baslangic');
     const bitis = interaction.options.getString('bitis');
     const yuk = interaction.options.getString('yuk');
     const ucret = interaction.options.getInteger('ucret');
 
-    const result = db.prepare('INSERT INTO deliveries (guild_id, start_loc, end_loc, cargo, reward, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(interaction.guild.id, baslangic, bitis, yuk, ucret, new Date().toISOString());
+    const result = db.prepare(
+      'INSERT INTO deliveries (guild_id, start_loc, end_loc, cargo, reward, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(interaction.guild.id, baslangic, bitis, yuk, ucret, 'open', new Date().toISOString());
 
     const embed = new EmbedBuilder()
-      .setColor(0x3498DB)
-      .setTitle('📦 Yeni Teslimat İlanı')
+      .setColor(0x2ecc71)
+      .setTitle('📦 Teslimat Oluşturuldu')
       .addFields(
-        { name: '🆔 ID', value: `${result.lastInsertRowid}`, inline: true },
+        { name: '🆔 Teslimat ID', value: `#${result.lastInsertRowid}`, inline: true },
         { name: '📍 Başlangıç', value: baslangic, inline: true },
         { name: '🏁 Bitiş', value: bitis, inline: true },
         { name: '📦 Yük', value: yuk, inline: true },
-        { name: '💰 Ücret', value: `${ucret} ₺`, inline: true },
-        { name: '✅ Durum', value: 'Açık', inline: true }
+        { name: '💰 Ücret', value: `₺${ucret}`, inline: true },
       )
-      .setFooter({ text: '🦅 KaraKartal Logistics — /teslimat-al [id] ile al' })
+      .setFooter({ text: '🦅 KaraKartal Logistics' })
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed] });
-  }
+  },
 };

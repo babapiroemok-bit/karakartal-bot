@@ -3,28 +3,29 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('siralama')
-    .setDescription('Bakiye sıralamasını gösterir (Top 10)'),
+    .setDescription('Bakiye liderlik tablosunu gösterir.'),
+
   async execute(interaction, db, client) {
-    const top = db.prepare('SELECT * FROM users WHERE guild_id = ? ORDER BY balance DESC LIMIT 10').all(interaction.guild.id);
-    const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+    const top10 = db.prepare('SELECT * FROM users WHERE guild_id = ? ORDER BY balance DESC LIMIT 10').all(interaction.guild.id);
+
+    const medals = ['🥇', '🥈', '🥉'];
+    let desc = '';
+
+    for (let i = 0; i < top10.length; i++) {
+      const u = top10[i];
+      const fetched = await client.users.fetch(u.user_id).catch(() => null);
+      const name = fetched ? fetched.username : 'Bilinmiyor';
+      const medal = medals[i] || `**${i + 1}.**`;
+      desc += `${medal} **${name}** — ₺${u.balance}\n`;
+    }
 
     const embed = new EmbedBuilder()
-      .setColor(0xF1C40F)
+      .setColor(0xf1c40f)
       .setTitle('💰 Bakiye Sıralaması')
+      .setDescription(desc || 'Henüz veri yok.')
       .setFooter({ text: '🦅 KaraKartal Logistics' })
       .setTimestamp();
 
-    if (top.length === 0) {
-      embed.setDescription('Henüz hiç veri yok.');
-    } else {
-      const lines = top.map((row, i) => {
-        const member = interaction.guild.members.cache.get(row.user_id);
-        const name = member ? member.user.username : `Kullanıcı (${row.user_id})`;
-        return `${medals[i]} **${name}** — ${row.balance} ₺`;
-      });
-      embed.setDescription(lines.join('\n'));
-    }
-
     await interaction.reply({ embeds: [embed] });
-  }
+  },
 };

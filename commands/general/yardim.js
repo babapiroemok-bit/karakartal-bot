@@ -1,78 +1,86 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 
 const pages = [
   {
-    title: '📖 Komut Listesi — Sayfa 1/2',
-    fields: [
-      {
-        name: '🛡️ Moderasyon',
-        value: '`/ban` — Kullanıcıyı yasakla\n`/kick` — Kullanıcıyı at\n`/mute` — Kullanıcıyı sustur\n`/uyari` — Uyarı ver\n`/uyarilar` — Uyarıları listele\n`/uyarisil` — Uyarı sil'
-      },
-      {
-        name: '⭐ Seviye',
-        value: '`/seviye` — Seviye ve XP bilgin\n`/liderlik` — XP sıralaması'
-      },
-      {
-        name: '🚛 Lojistik — Şoför',
-        value: '`/sofor-kayit` — Şoför kaydı oluştur\n`/sofor-profil` — Profilini görüntüle\n`/soforler` — Tüm şoförler\n`/arac-ekle` — Araç ekle (Yönetici)\n`/arac-listesi` — Araç filosu'
-      }
-    ]
+    title: '📋 Moderasyon Komutları',
+    description: [
+      '`/ban` — Kullanıcıyı yasakla',
+      '`/kick` — Kullanıcıyı at',
+      '`/mute` — Kullanıcıyı sustur',
+      '`/uyari` — Uyarı ver',
+      '`/uyarilar` — Uyarıları listele',
+      '`/uyarisil` — Uyarı sil',
+    ].join('\n'),
   },
   {
-    title: '📖 Komut Listesi — Sayfa 2/2',
-    fields: [
-      {
-        name: '📦 Lojistik — Teslimat',
-        value: '`/teslimat-olustur` — Teslimat ilanı oluştur\n`/teslimat-al` — Teslimat üstlen\n`/teslimat-tamamla` — Teslimatı tamamla\n`/aktif-teslimatlar` — Aktif ilanlar\n`/teslimat-gecmis` — Geçmiş teslimatlar'
-      },
-      {
-        name: '💰 Ekonomi',
-        value: '`/bakiye` — Bakiyeni görüntüle\n`/siralama` — Bakiye sıralaması'
-      },
-      {
-        name: '🎫 Destek & Genel',
-        value: '`/destek` — Ticket oluştur\n`/durum` — Sunucu durumu\n`/yardim` — Bu menü'
-      }
-    ]
-  }
+    title: '🚛 Lojistik Komutları',
+    description: [
+      '`/sofor-kayit` — Şoför ol',
+      '`/sofor-profil` — Profilini gör',
+      '`/soforler` — Tüm şoförler',
+      '`/arac-ekle` — Araç ekle (Admin)',
+      '`/arac-listesi` — Araç listesi',
+      '`/teslimat-olustur` — Teslimat oluştur',
+      '`/teslimat-al` — Teslimat üstlen',
+      '`/teslimat-tamamla` — Teslimatı bitir',
+      '`/aktif-teslimatlar` — Açık teslimatlar',
+      '`/teslimat-gecmis` — Geçmişin',
+      '`/bakiye` — Bakiyeni gör',
+      '`/siralama` — Bakiye sıralaması',
+    ].join('\n'),
+  },
+  {
+    title: '🏆 Leveling | 🎫 Destek | 📊 Genel',
+    description: [
+      '**Leveling**',
+      '`/seviye` — Seviyeni gör',
+      '`/liderlik` — XP tablosu',
+      '',
+      '**Destek**',
+      '`/destek` — Ticket aç',
+      '',
+      '**Genel**',
+      '`/durum` — Sunucu istatistikleri',
+      '`/yardim` — Bu menü',
+    ].join('\n'),
+  },
 ];
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('yardim')
-    .setDescription('Tüm komutları listeler'),
+    .setDescription('Komut listesini gösterir.'),
 
   async execute(interaction, db, client) {
-    const embed = buildPage(0);
-    const row = buildRow(0);
-    await interaction.reply({ embeds: [embed], components: [row], ephemeral: false });
+    let page = 0;
+
+    const getEmbed = (p) => new EmbedBuilder()
+      .setColor(0x3498db)
+      .setTitle(pages[p].title)
+      .setDescription(pages[p].description)
+      .setFooter({ text: `🦅 KaraKartal Logistics • Sayfa ${p + 1}/${pages.length}` })
+      .setTimestamp();
+
+    const getRow = (p) => new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('yardim_prev').setLabel('◀ Önceki').setStyle(ButtonStyle.Secondary).setDisabled(p === 0),
+      new ButtonBuilder().setCustomId('yardim_next').setLabel('Sonraki ▶').setStyle(ButtonStyle.Primary).setDisabled(p === pages.length - 1),
+    );
+
+    const msg = await interaction.reply({ embeds: [getEmbed(page)], components: [getRow(page)], fetchReply: true });
+
+    const collector = msg.createMessageComponentCollector({ time: 60000 });
+
+    collector.on('collect', async (btn) => {
+      if (btn.user.id !== interaction.user.id) {
+        return btn.reply({ content: '❌ Bu menü size ait değil!', ephemeral: true });
+      }
+      if (btn.customId === 'yardim_prev') page = Math.max(0, page - 1);
+      if (btn.customId === 'yardim_next') page = Math.min(pages.length - 1, page + 1);
+      await btn.update({ embeds: [getEmbed(page)], components: [getRow(page)] });
+    });
+
+    collector.on('end', async () => {
+      await interaction.editReply({ components: [] }).catch(() => {});
+    });
   },
-
-  async handleButton(interaction) {
-    const currentPage = interaction.message.embeds[0]?.title?.includes('1/2') ? 0 : 1;
-    const newPage = interaction.customId === 'help_next' ? currentPage + 1 : currentPage - 1;
-    if (newPage < 0 || newPage >= pages.length) return interaction.deferUpdate();
-
-    const embed = buildPage(newPage);
-    const row = buildRow(newPage);
-    await interaction.update({ embeds: [embed], components: [row] });
-  }
 };
-
-function buildPage(index) {
-  const page = pages[index];
-  const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setTitle(page.title)
-    .setFooter({ text: '🦅 KaraKartal Logistics' })
-    .setTimestamp();
-  page.fields.forEach(f => embed.addFields({ name: f.name, value: f.value }));
-  return embed;
-}
-
-function buildRow(index) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('help_prev').setLabel('◀ Önceki').setStyle(ButtonStyle.Secondary).setDisabled(index === 0),
-    new ButtonBuilder().setCustomId('help_next').setLabel('Sonraki ▶').setStyle(ButtonStyle.Secondary).setDisabled(index === pages.length - 1)
-  );
-}

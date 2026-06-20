@@ -1,5 +1,5 @@
-const { DatabaseSync } = require('node:sqlite');
-const db = new DatabaseSync('karakartal.db');
+const Database = require('better-sqlite3');
+const db = new Database('karakartal.db');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (

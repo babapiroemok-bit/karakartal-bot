@@ -1,20 +1,9 @@
-require('dotenv').config({ override: false });
-const { Client, GatewayIntentBits, Partials, Collection, Events, EmbedBuilder, REST, Routes } = require('discord.js');
+require('dotenv').config();
+const { Client, GatewayIntentBits, Partials, Collection, Events, ActivityType } = require('discord.js');
 const { joinVoiceChannel } = require('@discordjs/voice');
 const fs = require('fs');
 const path = require('path');
-const db = require('./database');
-
-const required = ['DISCORD_TOKEN'];
-const missing = required.filter(k => !process.env[k]);
-if (missing.length > 0) {
-  console.error('HATA: Eksik environment variables:', missing.join(', '));
-  process.exit(1);
-}
-
-console.log('Bot baslatiliyor...');
-console.log('NODE_VERSION:', process.version);
-console.log('GUILD_ID:', process.env.GUILD_ID ? 'SET' : 'NOT SET');
+const db = require('./database.js');
 
 const client = new Client({
   intents: [
@@ -26,7 +15,7 @@ const client = new Client({
     GatewayIntentBits.GuildPresences,
     GatewayIntentBits.DirectMessages,
   ],
-  partials: [Partials.Channel, Partials.Message, Partials.GuildMember]
+  partials: [Partials.Channel, Partials.Message, Partials.GuildMember],
 });
 
 client.commands = new Collection();
@@ -38,189 +27,136 @@ function loadCommands(dir) {
     if (file.isDirectory()) {
       loadCommands(fullPath);
     } else if (file.name.endsWith('.js')) {
-      try {
-        const command = require(fullPath);
-        if (command?.data?.name) {
-          client.commands.set(command.data.name, command);
-          console.log('Komut yuklendi:', command.data.name);
-        }
-      } catch (e) {
-        console.error('Komut yuklenemedi:', fullPath, e.message);
+      const command = require(fullPath);
+      if (command.data && command.execute) {
+        client.commands.set(command.data.name, command);
       }
     }
   }
 }
 
-try {
-  loadCommands(path.join(__dirname, 'commands'));
-  console.log('Toplam komut sayisi:', client.commands.size);
-} catch (e) {
-  console.error('loadCommands hatasi:', e.message);
-}
+loadCommands(path.join(__dirname, 'commands'));
 
-async function registerCommands(clientId, guildId) {
-  const commands = [];
-  client.commands.forEach(cmd => {
-    try { commands.push(cmd.data.toJSON()); } catch(e) { console.error('toJSON hatasi:', e.message); }
-  });
-  const rest = new REST().setToken(process.env.DISCORD_TOKEN);
+client.once(Events.ClientReady, (c) => {
+  console.log(`KaraKartal Bot aktif | ${c.user.tag}`);
+
   try {
-    if (guildId) {
-      await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: commands });
-      console.log(commands.length + ' komut guild\'e register edildi. Guild ID:', guildId);
-    } else {
-      await rest.put(Routes.applicationCommands(clientId), { body: commands });
-      console.log(commands.length + ' komut global olarak register edildi.');
+    const guild = c.guilds.cache.first();
+    if (guild) {
+      const voiceChannel = guild.channels.cache.get('1517073292802916493');
+      if (voiceChannel) {
+        joinVoiceChannel({
+          channelId: '1517073292802916493',
+          guildId: guild.id,
+          adapterCreator: guild.voiceAdapterCreator,
+          selfDeaf: true,
+          selfMute: true,
+        });
+        console.log('Ses kanalına bağlandı.');
+      } else {
+        console.warn('Ses kanalı bulunamadı, atlanıyor.');
+      }
     }
   } catch (err) {
-    console.error('Komut register hatasi:', err.message, err.code || '');
-  }
-}
-
-client.once(Events.ClientReady, async () => {
-  console.log('Bot baglandi:', client.user.tag, '| Client ID:', client.application.id);
-
-  // Tum sunuculara register et
-  for (const guild of client.guilds.cache.values()) {
-    await registerCommands(client.application.id, guild.id);
-  }
-  // GUILD_ID yoksa global da register et
-  if (!process.env.GUILD_ID) {
-    await registerCommands(client.application.id, null);
+    console.warn('Ses kanalı bağlantısı başarısız:', err.message);
   }
 
-  const VC_ID = '1517073292802916493';
-  const vc = client.channels.cache.get(VC_ID);
-  if (vc) {
-    try {
-      joinVoiceChannel({
-        channelId: vc.id,
-        guildId: vc.guild.id,
-        adapterCreator: vc.guild.voiceAdapterCreator,
-        selfDeaf: true,
-        selfMute: true,
-      });
-      console.log('Ses kanalina baglandi:', vc.name);
-    } catch (e) {
-      console.warn('Ses kanalina baglanamadi:', e.message);
-    }
-  }
-
-  const statuses = [
-    'KaraKartal Logistics aktif',
-    'Teslimatlar devam ediyor',
-    'Soforler yolda',
-    '/yardim | karakartal',
+  const presences = [
+    { name: '🦅 KaraKartal Logistics aktif', type: ActivityType.Playing },
+    { name: '📦 Teslimatlar devam ediyor', type: ActivityType.Watching },
+    { name: '🚛 Şoförler yolda', type: ActivityType.Watching },
+    { name: '/yardim | karakartal', type: ActivityType.Listening },
   ];
   let i = 0;
-  setInterval(() => { client.user.setActivity(statuses[i % statuses.length]); i++; }, 30000);
-  client.user.setActivity(statuses[0]);
-  console.log('Bot hazir! Komutlar aktif.');
+  setInterval(() => {
+    c.user.setActivity(presences[i % presences.length]);
+    i++;
+  }, 30000);
+  c.user.setActivity(presences[0]);
 });
 
-// Bot yeni bir sunucuya eklendiginde komutlari aninda register et
-client.on(Events.GuildCreate, async guild => {
-  console.log('Yeni sunucuya eklendi:', guild.name, guild.id);
-  await registerCommands(client.application.id, guild.id);
+client.on(Events.GuildMemberAdd, async (member) => {
+  try {
+    const channel =
+      member.guild.channels.cache.find((c) => c.name === 'hos-geldin') ||
+      member.guild.channels.cache.find((c) => c.name === 'genel') ||
+      member.guild.channels.cache.find((c) => c.name === 'general');
+
+    if (channel) {
+      const { EmbedBuilder } = require('discord.js');
+      const embed = new EmbedBuilder()
+        .setColor(0xe67e22)
+        .setTitle('🦅 KaraKartal Logistics Hoş Geldin')
+        .setDescription(`${member} sunucumuza hoş geldin!\nToplam üye sayısı: **${member.guild.memberCount}**`)
+        .setFooter({ text: 'KaraKartal Logistics' })
+        .setTimestamp();
+      await channel.send({ embeds: [embed] });
+    }
+
+    const role = member.guild.roles.cache.find((r) => r.name === 'Üye');
+    if (role) await member.roles.add(role);
+  } catch (err) {
+    console.error('GuildMemberAdd hatası:', err);
+  }
 });
 
-client.on(Events.InteractionCreate, async interaction => {
+client.on(Events.MessageCreate, async (message) => {
+  if (message.author.bot || !message.guild) return;
+
+  const xpGain = Math.floor(Math.random() * 11) + 5;
+  const userId = message.author.id;
+  const guildId = message.guild.id;
+
+  let user = db.prepare('SELECT * FROM users WHERE user_id = ? AND guild_id = ?').get(userId, guildId);
+  if (!user) {
+    db.prepare('INSERT INTO users (user_id, guild_id) VALUES (?, ?)').run(userId, guildId);
+    user = db.prepare('SELECT * FROM users WHERE user_id = ? AND guild_id = ?').get(userId, guildId);
+  }
+
+  const newXp = user.xp + xpGain;
+  const xpNeeded = Math.floor(user.level * 100 * 1.5);
+
+  if (newXp >= xpNeeded) {
+    const newLevel = user.level + 1;
+    db.prepare('UPDATE users SET xp = 0, level = ? WHERE user_id = ? AND guild_id = ?').run(newLevel, userId, guildId);
+    const { EmbedBuilder } = require('discord.js');
+    const embed = new EmbedBuilder()
+      .setColor(0xf1c40f)
+      .setTitle('🎉 Seviye Atladın!')
+      .setDescription(`${message.author} **${newLevel}. seviyeye** ulaştı! Tebrikler!`)
+      .setFooter({ text: '🦅 KaraKartal Logistics' })
+      .setTimestamp();
+    await message.channel.send({ embeds: [embed] });
+  } else {
+    db.prepare('UPDATE users SET xp = ? WHERE user_id = ? AND guild_id = ?').run(newXp, userId, guildId);
+  }
+});
+
+client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isChatInputCommand()) {
     const command = client.commands.get(interaction.commandName);
     if (!command) return;
     try {
       await command.execute(interaction, db, client);
     } catch (err) {
-      console.error('Komut hatasi (' + interaction.commandName + '):', err);
-      const msg = { content: 'Bir hata olustu.', ephemeral: true };
-      try {
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp(msg);
-        } else {
-          await interaction.reply(msg);
-        }
-      } catch(e) {}
+      console.error(err);
+      const msg = { content: '❌ Bir hata oluştu!', ephemeral: true };
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp(msg);
+      } else {
+        await interaction.reply(msg);
+      }
     }
   }
 
-  if (interaction.isButton()) {
+  if (interaction.isButton() && interaction.customId.startsWith('ticket_')) {
     try {
-      if (interaction.customId.startsWith('ticket_')) {
-        const ticketHandler = require('./commands/support/destek');
-        await ticketHandler.handleButton(interaction, db, client);
-      }
-      if (interaction.customId === 'help_next' || interaction.customId === 'help_prev') {
-        const yardimHandler = require('./commands/general/yardim');
-        await yardimHandler.handleButton(interaction);
-      }
-    } catch(e) {
-      console.error('Button handler hatasi:', e.message);
+      const destek = require('./commands/support/destek.js');
+      await destek.handleButton(interaction, db, client);
+    } catch (err) {
+      console.error('Ticket buton hatası:', err);
     }
   }
 });
 
-client.on(Events.MessageCreate, async message => {
-  if (message.author.bot || !message.guild) return;
-  try {
-    const xpGain = Math.floor(Math.random() * 11) + 5;
-    let row = db.prepare('SELECT * FROM users WHERE user_id = ? AND guild_id = ?').get(message.author.id, message.guild.id);
-    if (!row) {
-      db.prepare('INSERT INTO users (user_id, guild_id) VALUES (?, ?)').run(message.author.id, message.guild.id);
-      row = { xp: 0, level: 1 };
-    }
-    const newXp = row.xp + xpGain;
-    const xpNeeded = Math.floor(row.level * 100 * 1.5);
-    if (newXp >= xpNeeded) {
-      const newLevel = row.level + 1;
-      db.prepare('UPDATE users SET xp = ?, level = ? WHERE user_id = ? AND guild_id = ?').run(newXp - xpNeeded, newLevel, message.author.id, message.guild.id);
-      const embed = new EmbedBuilder()
-        .setColor(0xF1C40F)
-        .setTitle('Seviye Atlandi!')
-        .setDescription('Tebrikler ' + message.author + '! Yeni seviyeniz: **' + newLevel + '**')
-        .setFooter({ text: 'KaraKartal Logistics' })
-        .setTimestamp();
-      message.channel.send({ embeds: [embed] });
-    } else {
-      db.prepare('UPDATE users SET xp = ? WHERE user_id = ? AND guild_id = ?').run(newXp, message.author.id, message.guild.id);
-    }
-  } catch(e) {
-    console.error('XP hatasi:', e.message);
-  }
-});
-
-client.on(Events.GuildMemberAdd, async member => {
-  try {
-    const channel = member.guild.channels.cache.find(c =>
-      c.name === 'hos-geldin' || c.name === 'genel' || c.name === 'general'
-    );
-    if (channel) {
-      const embed = new EmbedBuilder()
-        .setColor(0xE67E22)
-        .setTitle('KaraKartal Logisticse Hos Geldin!')
-        .setDescription('Merhaba ' + member + '!\nSunucumuza hos geldin.')
-        .addFields({ name: 'Toplam Uye', value: '' + member.guild.memberCount, inline: true })
-        .setThumbnail(member.user.displayAvatarURL())
-        .setFooter({ text: 'KaraKartal Logistics' })
-        .setTimestamp();
-      channel.send({ embeds: [embed] });
-    }
-    const role = member.guild.roles.cache.find(r => r.name === 'Uye');
-    if (role) member.roles.add(role).catch(console.error);
-  } catch(e) {
-    console.error('GuildMemberAdd hatasi:', e.message);
-  }
-});
-
-process.on('unhandledRejection', err => {
-  console.error('Unhandled rejection:', err?.message || err);
-});
-process.on('uncaughtException', err => {
-  console.error('Uncaught exception:', err);
-  process.exit(1);
-});
-
-console.log('Discord login deneniyor...');
-client.login(process.env.DISCORD_TOKEN).catch(err => {
-  console.error('LOGIN HATASI:', err.message);
-  process.exit(1);
-});
+client.login(process.env.DISCORD_TOKEN);

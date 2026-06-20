@@ -3,23 +3,28 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('teslimat-gecmis')
-    .setDescription('Tamamladığın teslimatların geçmişini gösterir'),
+    .setDescription('Tamamladığın teslimatları listeler.'),
+
   async execute(interaction, db, client) {
-    const deliveries = db.prepare('SELECT * FROM deliveries WHERE driver_id = ? AND guild_id = ? AND status = \'completed\' ORDER BY id DESC LIMIT 10').all(interaction.user.id, interaction.guild.id);
+    const deliveries = db.prepare("SELECT * FROM deliveries WHERE driver_id = ? AND status = 'completed' ORDER BY completed_at DESC LIMIT 20").all(interaction.user.id);
 
     const embed = new EmbedBuilder()
-      .setColor(0x95A5A6)
-      .setTitle(`📋 ${interaction.user.username} — Teslimat Geçmişi`)
-      .setFooter({ text: '🦅 KaraKartal Logistics — Son 10 teslimat' })
+      .setColor(0x9b59b6)
+      .setTitle('📋 Teslimat Geçmişim')
+      .setFooter({ text: '🦅 KaraKartal Logistics' })
       .setTimestamp();
 
     if (deliveries.length === 0) {
-      embed.setDescription('Henüz tamamlanmış teslimatın yok.');
+      embed.setDescription('Henüz tamamlanmış teslimatınız yok.');
     } else {
-      const lines = deliveries.map(d => `**#${d.id}** ${d.start_loc} → ${d.end_loc} | 📦 ${d.cargo} | 💰 ${d.reward} ₺`);
-      embed.setDescription(lines.join('\n'));
+      for (const d of deliveries) {
+        embed.addFields({
+          name: `#${d.id} — ${d.start_loc} → ${d.end_loc}`,
+          value: `Yük: ${d.cargo} | Kazanç: ₺${d.reward} | Tarih: ${new Date(d.completed_at).toLocaleDateString('tr-TR')}`,
+        });
+      }
     }
 
     await interaction.reply({ embeds: [embed] });
-  }
+  },
 };
