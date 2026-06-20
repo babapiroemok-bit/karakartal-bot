@@ -8,7 +8,7 @@ process.on('uncaughtException', (err) => {
   console.error('[UncaughtException]', err?.message || err);
 });
 
-const { Client, GatewayIntentBits, Partials, Collection, Events, ActivityType, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, Collection, Events, ActivityType, EmbedBuilder, REST, Routes } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const db = require('./database.js');
@@ -49,6 +49,22 @@ function loadCommands(dir) {
 
 loadCommands(path.join(__dirname, 'commands'));
 console.log(`${client.commands.size} komut yüklendi.`);
+
+// Slash komutlarını otomatik kayıt et
+async function deployCommands() {
+  try {
+    const commands = [...client.commands.values()].map(c => c.data.toJSON());
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+    await rest.put(
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+      { body: commands }
+    );
+    console.log(`✅ ${commands.length} slash komutu sunucuya kayıt edildi.`);
+  } catch (err) {
+    console.error('Komut kayıt hatası:', err.message);
+  }
+}
+deployCommands();
 
 client.once(Events.ClientReady, (c) => {
   console.log(`KaraKartal Bot aktif | ${c.user.tag}`);
