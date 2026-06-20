@@ -1,4 +1,6 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+
+const YETKILİ_ROLLER = ['1515090088265125889', '1515628992269652109'];
 
 const renkler = {
   'Kırmızı': 0xe74c3c,
@@ -27,28 +29,16 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('duyuru')
     .setDescription('Embed duyuru gönderir.')
+    .addStringOption(o => o.setName('baslik').setDescription('Duyuru başlığı').setRequired(true))
+    .addStringOption(o => o.setName('mesaj').setDescription('Duyuru mesajı').setRequired(true))
     .addStringOption(o =>
-      o.setName('baslik').setDescription('Duyuru başlığı').setRequired(true)
+      o.setName('renk').setDescription('Embed rengi').setRequired(false)
+        .addChoices(...Object.keys(renkler).map(name => ({ name, value: name })))
     )
-    .addStringOption(o =>
-      o.setName('mesaj').setDescription('Duyuru mesajı').setRequired(true)
-    )
-    .addStringOption(o =>
-      o.setName('renk')
-        .setDescription('Embed rengi')
-        .setRequired(false)
-        .addChoices(
-          ...Object.keys(renkler).map(name => ({ name, value: name }))
-        )
-    )
-    .addChannelOption(o =>
-      o.setName('kanal').setDescription('Göndereceğin kanal (boş bırakırsan mevcut kanal)').setRequired(false)
-    ),
+    .addChannelOption(o => o.setName('kanal').setDescription('Gönderilecek kanal (boş = mevcut kanal)').setRequired(false)),
 
   async execute(interaction, db, client) {
-    const yetkili = interaction.member.roles.cache.some(r => ['Yetkili', 'Moderator'].includes(r.name))
-      || interaction.member.permissions.has(PermissionFlagsBits.Administrator);
-
+    const yetkili = interaction.member.roles.cache.some(r => YETKILİ_ROLLER.includes(r.id));
     if (!yetkili) return interaction.reply({ content: '❌ Bu komutu kullanma yetkiniz yok!', ephemeral: true });
 
     const baslik = interaction.options.getString('baslik');
@@ -56,10 +46,8 @@ module.exports = {
     const renkAdi = interaction.options.getString('renk') || 'Turuncu';
     const kanal = interaction.options.getChannel('kanal') || interaction.channel;
 
-    const renk = renkler[renkAdi] ?? 0xe67e22;
-
     const embed = new EmbedBuilder()
-      .setColor(renk)
+      .setColor(renkler[renkAdi] ?? 0xe67e22)
       .setTitle(`📢 ${baslik}`)
       .setDescription(mesaj)
       .setFooter({ text: `🦅 KaraKartal Logistics • ${interaction.user.username} tarafından` })
